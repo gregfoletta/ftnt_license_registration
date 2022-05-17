@@ -7,6 +7,7 @@ use Pod::Usage;
 use Getopt::Long;
 use Term::ANSIColor;
 use Carp;
+use File::Spec;
 use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
 use CAM::PDF;
 use Mojo::UserAgent;
@@ -18,46 +19,159 @@ GetOptions(
     'username=s',
     'password=s',
     'client_id=s',
+    'license-dir=s',
     'no-licenses=s',
     'help' => sub { pod2usage(1) }
 ) or pod2usage(2);
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
-ftnt_license_registration - extract license information from Fortinet zip files and register with Fortinet support.
+ftnt_license_registration - extract, register, and download Fortinet licenses.
+
+=head1 VERSION
+
+version .2
 
 =head1 SYNOPSIS
 
-./ftnt_license_registration --username <IAM API User> [--password <IAM API Password> --no-licenses]
+    # Register FTNT licenses straight from zip files.
+    # FortiCloud credentials stored in ~/.ftnt/ftnt_cloud_api
+    # Licenses will be downloaded into the working directory
+    ./ftnt_license_registration ~/Documents/licenses/*.zip
 
-Script will prefer FORTICARE_API_PASSWORD environment variable over command line argument.
+    # Specify the directory to store licenses
+    ./ftnt_license_registration --license-dir ~/Documents/licenses
+
+    # Don't download licenses, just regisuter
+    ./ftnt_license_registration --no-licenses
+
+    # API user/pass can be specified as ENV vars
+    export FORTICLOUD_API_USERNAME='<user>'
+    export FORTICLOUD_API_PASSWORD='<pass>'
+    ./ftnt_license_registration
+
+    # Or on the command line
+    ./ftnt_license_registration --username '<user>' --pasword '<pass>'
+
+=head1 OPTIONS
+
+=over
+
+=item -u|--username I<user> - the FortiCloud API username
+
+=item -p|--password I<pass> - the FortiCloud API password
+
+=item -l|--license-dir I<path> - the path to save registered licenses
+
+=item -n|--no-licenses - don't download licenses
+
+=item -h|--help - print usage information
+
+=back
+
+
+=head1 DESCRIPTION
+
+The 'Fortinet License Registration' script allows you to easly bulk-register and download Fortinet licenses.
+
+The licenses come in email as PDFs inside zip archives. This script takes one or more zip files and
+
+=over 1
+
+=item Opens the zip file in memory
+
+=item Reads the PDFs inside
+
+=item Extracts the registration code
+
+=item Registers the code into the FortiCare support portal
+
+=back
+
+=head1 REQUIREMENTS
+
+You'll need the following modules, preferably installed using the more modern L<cpanminus|https://metacpan.org/pod/App::cpanminus>:
+
+    sh$ cpanm Archive::Zip CAM::PDF Mojo::UserAgent
+
+or the old CPAN client:
+
+    sh$ cpan Archive::Zip CAM::PDF Mojo::UserAgent
+
+=head1 AUTHENTICATION
+
+The script uses version 3 of the registration API. This uses OAuth tokens generated from IAM API username/passwords. You can create IAM users L<here|https://support.fortinet.com/iam/#/api-user>.
+
+Once you have your credentials, the script will search for them in three places:
+
+=over 
+
+=item In ~/.ftnt/ftnt_cloud_api formatted as <username>:<password>
+
+=over
+
+=item  Lines beginning with '#' are skipped
+
+=back
+
+=item In the environment variabes C<FORTICLOUD_API_USER> and C<FORTICLOUD_API_PASSWORD>
+
+=item In the command line arguments C<-u|--username> and C<-p|--password>.
+
+=back
+
+If the credentials are available in multiple places, local dotfile beats environment variable beats commandline.
+
+Note that the password appears to always have an exclaimation mark, so be sure to enclose in single quotes if you're using the environment variable or command line methods.
+
+=head1 LICENSE DOWNLOAD
+
+The registration API generally returns the license keys for the codes you register with a couple of caveats:
+
+=over
+
+=item Some aren't returned, for example FortiManager licneses
+
+=item Some devices require an IP specification, which will not have been done rendering the license useless.
+
+=back
+
+You will get warnings in the console for registration codes that do not return a license.
 
 =cut
 
-
-croak "No --username specified" unless $args{username};
+# We don't want to print Zip errors to consumers - we'll handle it ourselves.
+Archive::Zip::setErrorHandler( sub {} );
 
 # Extract the registration codes from zip files
 my @codes = extract_reg_codes(@ARGV);
 
+# Try and get creds from ~/.ftnt/ftnt_cloud_api
+my %dotfile_creds = dotfile_creds();
+
 # Get our API access token
 my $access_token = forticare_auth(
-    username => $args{username},
-    password => $ENV{FORTICARE_API_PASSWORD} // $args{password},
+    # FORTICARE_API was a mistake in the first version.
+    username => $dotfile_creds{username} // $args{username} // $ENV{FORTICLOUD_API_USER},
+    password => $dotfile_creds{password} // $args{password} // $ENV{FORTICLOUD_API_PASSWORD} // $ENV{FORTICARE_API_PASSWORD},
     client_id => $args{client_id} // 'assetmanagement'
 );
 
 # Register the devices
 my @licenses = forticare_register($access_token, @codes);
 
-
 # Write out the license files
-write_license_files(@licenses) unless $args{'no-licenses'};
+write_license_files(
+    directory => $args{'license-dir'},
+    licenses => [@licenses] 
+) unless $args{'no-licenses'};
 
 
-### Functions ###
+### Log Helpers###
 
 sub log_output {
     print STDERR colored('- ', 'bold green');
@@ -66,7 +180,31 @@ sub log_output {
 
 sub log_error {
     say STDERR colored('- '.join(' ', @_), 'bold red');
+    exit(1);
 }
+
+sub log_warning {
+    say STDERR colored('- '.join(' ', @_), 'bold yellow');
+}
+
+sub dotfile_creds {
+    my $cred_path = File::Spec->canonpath( "$ENV{HOME}/.ftnt/ftnt_cloud_api" );
+    my %creds;
+
+    open(my $fh, "<:encoding(UTF-8)", $cred_path) or return ();
+
+    while (my $line = <$fh>) {
+        next if $line =~ m{^\s*#};
+
+        chomp $line;
+
+        @creds{qw(username password)} = split ':', $line;
+
+        return %creds;
+    }
+}
+
+    
 
 sub extract_reg_codes {
     my (@zip_files) = @_;
@@ -79,8 +217,8 @@ sub extract_reg_codes {
     for my $zip_file (@zip_files) {
         log_output("Reading $zip_file");
 
-        if ($zip->read($zip_file) != AZ_OK) { 
-            carp "Could not open zipfile '$zip_file'";
+        if (eval { $zip->read($zip_file) } != AZ_OK) { 
+            log_warning("$zip_file does not appear to be a valid zip file, skipping...");
             next ZIP;
         }
     }
@@ -121,13 +259,30 @@ sub forticare_auth {
         }
     );
 
-    my $res = $ua->post( $auth_info{uri} => json => $auth_info{json} )->result->json;
+    my $res = $ua->post( $auth_info{uri} => json => $auth_info{json} )->result;
+
+    if ($res->is_error) {
+        my $msg;
+        if (defined $res->json->{oauth}) {
+            $msg = join '/', values %{$res->json->{oauth}};
+        } elsif (defined $res->json->{error_message}) {
+            $msg = $res->json->{error_message};
+        } elsif (defined $res->json->{error_description}) {
+            $msg = $res->json->{error_description};
+        } else {
+            $msg = "Unknown Error";
+        }
+            
+        log_error("Authentication Error ". $msg);
+    }
 
     if (defined $res->{error}) {
         croak "Could not authenticate: ". $res->{error_description};
     }
 
-    return $res->{access_token};
+    log_output("Authentication Success");
+
+    return $res->json->{access_token};
 }
 
 sub forticare_register {
@@ -150,7 +305,7 @@ sub forticare_register {
         )->result;
 
         if ($res->is_error) {
-            log_error("Error: ".$res->json->{message});
+            log_warning("Warning: ".$res->json->{message});
             next CODE;
         }
 
@@ -166,10 +321,24 @@ sub forticare_register {
 }
 
 sub write_license_files {
-    my (@licenses) = @_;
+    my (%license_info) = @_;
 
-    for my $license (@licenses) {
-        open(my $fh, '>:encoding(UTF-8)', $license->{serialNumber}."lic");
+    $license_info{directory} //= $ENV{PWD};
+
+    LICENSE:
+    for my $license (@{ $license_info{licenses} }) {
+        # Some devices don't return the license file (e.g. FMG)
+        next unless $license->{licenseFile};
+
+        my $license_path = File::Spec->canonpath( $license_info{directory}."/".$license->{serialNumber}.".lic" );
+
+        my $fh;
+        if(!open($fh, '>:encoding(UTF-8)', $license_path)) {
+            log_warning("Could not open $license_path for writing, skipping...");
+            next LICENSE;
+        }
+
+        log_output("Writing $license_path");    
         print $fh $license->{licenseFile};
         close $fh;
     }
