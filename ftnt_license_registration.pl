@@ -328,7 +328,10 @@ sub write_license_files {
     LICENSE:
     for my $license (@{ $license_info{licenses} }) {
         # Some devices don't return the license file (e.g. FMG)
-        next unless $license->{licenseFile};
+        if(!$license->{licenseFile}) {
+            log_warning("No license file received for $license->{serialNumber}");
+            next LICENSE;
+        }
 
         my $license_path = File::Spec->canonpath( $license_info{directory}."/".$license->{serialNumber}.".lic" );
 
