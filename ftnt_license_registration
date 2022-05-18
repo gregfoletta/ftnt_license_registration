@@ -34,7 +34,7 @@ ftnt_license_registration - extract, register, and download Fortinet licenses.
 
 =head1 VERSION
 
-version .2
+version .3
 
 =head1 SYNOPSIS
 
@@ -309,12 +309,18 @@ sub forticare_register {
             next CODE;
         }
 
-        my $license = $res->json->{assetDetails}{license};
+        my %license;
+        @license{ qw(sku file serial) } = (
+            @{ $res->json->{assetDetails}{license} }{ qw(licenseSKU licenseFile) },
+            $res->json->{assetDetails}{serialNumber}
+        );
 
-        log_output("Registered $license->{licenseSKU} ($license->{serialNumber})");
+
+
+        log_output("Registered $license{sku} ($license{serial})");
 
         # Push the license and serial on to the stack
-        push @licenses, $license;
+        push @licenses, \%license;
     }
 
     return @licenses;
@@ -328,12 +334,12 @@ sub write_license_files {
     LICENSE:
     for my $license (@{ $license_info{licenses} }) {
         # Some devices don't return the license file (e.g. FMG)
-        if(!$license->{licenseFile}) {
-            log_warning("No license file received for $license->{serialNumber}");
+        if (!$license->{file}) {
+            log_warning("No license file received for $license->{serial}");
             next LICENSE;
         }
 
-        my $license_path = File::Spec->canonpath( $license_info{directory}."/".$license->{serialNumber}.".lic" );
+        my $license_path = File::Spec->canonpath( $license_info{directory}."/".$license->{serial}.".lic" );
 
         my $fh;
         if(!open($fh, '>:encoding(UTF-8)', $license_path)) {
@@ -342,7 +348,7 @@ sub write_license_files {
         }
 
         log_output("Writing $license_path");    
-        print $fh $license->{licenseFile};
+        print $fh $license->{file};
         close $fh;
     }
 } 
