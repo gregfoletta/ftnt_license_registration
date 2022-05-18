@@ -8,24 +8,26 @@ version .2
 
 # SYNOPSIS
 
-    # Register FTNT licenses straight from zip files.
-    # FortiCloud credentials stored in ~/.ftnt/ftnt_cloud_api
-    # Licenses will be downloaded into the working directory
-    ./ftnt_license_registration ~/Documents/licenses/*.zip
+```sh
+# Register FTNT licenses straight from zip files.
+# FortiCloud credentials stored in ~/.ftnt/ftnt_cloud_api
+# Licenses will be downloaded into the working directory
+./ftnt_license_registration ~/Documents/licenses/*.zip
 
-    # Specify the directory to store licenses
-    ./ftnt_license_registration --license-dir ~/Documents/licenses
+# Specify the directory to store licenses
+./ftnt_license_registration --license-dir ~/Documents/licenses
 
-    # Don't download licenses, just regisuter
-    ./ftnt_license_registration --no-licenses
+# Don't download licenses, just regisuter
+./ftnt_license_registration --no-licenses
 
-    # API user/pass can be specified as ENV vars
-    export FORTICLOUD_API_USERNAME='<user>'
-    export FORTICLOUD_API_PASSWORD='<pass>'
-    ./ftnt_license_registration
+# API user/pass can be specified as ENV vars
+export FORTICLOUD_API_USERNAME='<user>'
+export FORTICLOUD_API_PASSWORD='<pass>'
+./ftnt_license_registration
 
-    # Or on the command line
-    ./ftnt_license_registration --username '<user>' --pasword '<pass>'
+# Or on the command line
+./ftnt_license_registration --username '<user>' --pasword '<pass>'
+```
 
 # OPTIONS
 
