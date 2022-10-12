@@ -21,6 +21,7 @@ GetOptions(
     'client_id=s',
     'license-dir=s',
     'no-licenses=s',
+    'ip-addresses=s',
     'help' => sub { pod2usage(1) }
 ) or pod2usage(2);
 
@@ -150,6 +151,8 @@ Archive::Zip::setErrorHandler( sub {} );
 # Extract the registration codes from zip files
 my @codes = extract_reg_codes(@ARGV);
 
+my @ipv4_addresses = license_ipv4_addresses($args{'ip-addresses'}, scalar @codes);
+
 # Try and get creds from ~/.ftnt/ftnt_cloud_api
 my %dotfile_creds = dotfile_creds();
 
@@ -204,7 +207,27 @@ sub dotfile_creds {
     }
 }
 
-    
+sub license_ipv4_addresses {
+    my ($ip_or_file, $n_codes) = @_;
+    my @ips;
+
+    return () unless defined $ip_or_file;
+
+    if (open(my $fh, "<:encoding(UTF-8)", $ip_or_file)) {
+        log_warning "File-based '--ip-addresses' not implemented yet, ignoring";
+        return ();
+    } else {
+        # Rough IPv4 validation
+        if ($ip_or_file =~ m{ (\d{1,3}\.){3} \d{1,3}$}xms) {
+            @ips = ($ip_or_file) x $n_codes;
+        } else {
+            log_warning "Argument to '--ip-addresses' is neither a file, nor an IP address, ignoring";
+            return ();
+        }
+    }
+}        
+
+
 
 sub extract_reg_codes {
     my (@zip_files) = @_;
