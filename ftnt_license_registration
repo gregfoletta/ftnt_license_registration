@@ -21,7 +21,7 @@ GetOptions(
     'client_id=s',
     'license-dir=s',
     'no-licenses=s',
-    'ip-addresses=s',
+    'ipv4-addresses=s',
     'help' => sub { pod2usage(1) }
 ) or pod2usage(2);
 
@@ -69,6 +69,8 @@ version .3
 =item -l|--license-dir I<path> - the path to save registered licenses
 
 =item -n|--no-licenses - don't download licenses
+
+=item -n|--ipv4-addresses - assign an IPv4 address when registering (see section below for more details)
 
 =item -h|--help - print usage information
 
@@ -129,6 +131,18 @@ If the credentials are available in multiple places, local dotfile beats environ
 
 Note that the password appears to always have an exclaimation mark, so be sure to enclose in single quotes if you're using the environment variable or command line methods.
 
+=head1 IPv4 ADDRESSES
+
+The C<--ipv4-addresses> argument will eventually take two arguments, although only one is implemented at this stage:
+
+=over
+
+=item It takes a single IPv4 address, and will apply this address to all registrations.
+
+=item It will take a file with an IP address on each line, and apply each IP to eace (not currently implemented).
+
+Some devices do not take an IP address (for example, FortiGates). This script will not discriminate, and will still try to apply the IP address. Recommendation it that if you're using this command, separate the licenses that require an IP into a different folder. You can this run this script across that folder with this --ipv4-addresses argument.
+
 =head1 LICENSE DOWNLOAD
 
 The registration API generally returns the license keys for the codes you register with a couple of caveats:
@@ -151,7 +165,8 @@ Archive::Zip::setErrorHandler( sub {} );
 # Extract the registration codes from zip files
 my @codes = extract_reg_codes(@ARGV);
 
-my @ipv4_addresses = license_ipv4_addresses($args{'ip-addresses'}, scalar @codes);
+# Need the number if codes so we can multiply the single IP by that number.
+my @ipv4_addresses = license_ipv4_addresses($args{'ipv4-addresses'}, scalar @codes);
 
 # Try and get creds from ~/.ftnt/ftnt_cloud_api
 my %dotfile_creds = dotfile_creds();

@@ -33,6 +33,7 @@ version .3
 - -p|--password _pass_ - the FortiCloud API password
 - -l|--license-dir _path_ - the path to save registered licenses
 - -n|--no-licenses - don't download licenses
+- -n|--ipv4-addresses - assign an IPv4 address when registering (see section below for more details)
 - -h|--help - print usage information
 
 # DESCRIPTION
@@ -71,6 +72,15 @@ If the credentials are available in multiple places, local dotfile beats environ
 
 Note that the password appears to always have an exclaimation mark, so be sure to enclose in single quotes if you're using the environment variable or command line methods.
 
+# IPv4 ADDRESSES
+
+The `--ipv4-addresses` argument will eventually take two arguments, although only one is implemented at this stage:
+
+- It takes a single IPv4 address, and will apply this address to all registrations.
+- It will take a file with an IP address on each line, and apply each IP to eace (not currently implemented).
+
+    Some devices do not take an IP address (for example, FortiGates). This script will not discriminate, and will still try to apply the IP address. Recommendation it that if you're using this command, separate the licenses that require an IP into a different folder. You can this run this script across that folder with this --ipv4-addresses argument.
+
 # LICENSE DOWNLOAD
 
 The registration API generally returns the license keys for the codes you register with a couple of caveats:
@@ -79,3 +89,11 @@ The registration API generally returns the license keys for the codes you regist
 - Some devices require an IP specification, which will not have been done rendering the license useless.
 
 You will get warnings in the console for registration codes that do not return a license.
+
+# POD ERRORS
+
+Hey! **The above document had some coding errors, which are explained below:**
+
+- Around line 146:
+
+    You forgot a '=back' before '=head1'
