@@ -165,7 +165,7 @@ my $access_token = forticare_auth(
 );
 
 # Register the devices
-my @licenses = forticare_register($access_token, @codes);
+my @licenses = forticare_register($access_token, @codes, @ipv4_addresses);
 
 # Write out the license files
 write_license_files(
@@ -309,7 +309,7 @@ sub forticare_auth {
 }
 
 sub forticare_register {
-    my ($access_token, @reg_codes) = @_;
+    my ($access_token, @reg_codes, @ipv4_addresses) = @_;
 
     my @licenses;
 
@@ -318,12 +318,22 @@ sub forticare_register {
     CODE:
     for my $code (@reg_codes) {
         log_output("Registering code $code");
+
+        # Is there an IPv4 address to go along with this?
+        my $ipv4_address = shift @ipv4_addresses;
+        if (defined $ipv4_address) {
+            log_output "IPv4 address found to be assigned: $ipv4_address" if $ipv4_address;
+        } else {
+            $ipv4_address = '';
+        }
+
         my $res = $ua->post(
             'https://support.fortinet.com/ES/api/registration/v3/licenses/register' =>
             { Authorization => "Bearer $access_token" } =>
             json => {
                 licenseRegistrationCode => $code,
-                description => "Auto Registered ".localtime()
+                description => "Auto Registered ".localtime(),
+                additionalInfo => $ipv4_address
             }
         )->result;
 
