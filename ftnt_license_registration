@@ -159,11 +159,29 @@ You will get warnings in the console for registration codes that do not return a
 
 =cut
 
+### Log Helpers###
+
+sub log_output {
+    print STDERR colored('- ', 'bold green');
+    say STDERR join ' ', @_;
+}
+
+sub log_error {
+    say STDERR colored('- '.join(' ', @_), 'bold red');
+    exit(1);
+}
+
+sub log_warning {
+    say STDERR colored('- '.join(' ', @_), 'bold yellow');
+}
+
 # We don't want to print Zip errors to consumers - we'll handle it ourselves.
 Archive::Zip::setErrorHandler( sub {} );
 
 # Extract the registration codes from zip files
 my @codes = extract_reg_codes(@ARGV);
+
+log_error "No codes found, exiting" unless @codes;
 
 # Need the number if codes so we can multiply the single IP by that number.
 my @ipv4_addresses = license_ipv4_addresses($args{'ipv4-addresses'}, scalar @codes);
@@ -180,7 +198,7 @@ my $access_token = forticare_auth(
 );
 
 # Register the devices
-my @licenses = forticare_register($access_token, @codes, @ipv4_addresses);
+my @licenses = forticare_register($access_token, \@codes, \@ipv4_addresses);
 
 # Write out the license files
 write_license_files(
@@ -189,21 +207,6 @@ write_license_files(
 ) unless $args{'no-licenses'};
 
 
-### Log Helpers###
-
-sub log_output {
-    print STDERR colored('- ', 'bold green');
-    say STDERR join ' ', @_;
-}
-
-sub log_error {
-    say STDERR colored('- '.join(' ', @_), 'bold red');
-    exit(1);
-}
-
-sub log_warning {
-    say STDERR colored('- '.join(' ', @_), 'bold yellow');
-}
 
 sub dotfile_creds {
     my $cred_path = File::Spec->canonpath( "$ENV{HOME}/.ftnt/ftnt_cloud_api" );
@@ -236,7 +239,7 @@ sub license_ipv4_addresses {
         if ($ip_or_file =~ m{ (\d{1,3}\.){3} \d{1,3}$}xms) {
             @ips = ($ip_or_file) x $n_codes;
         } else {
-            log_warning "Argument to '--ip-addresses' is neither a file, nor an IP address, ignoring";
+            log_warning "Argument to '--ipv4-addresses' is neither a file, nor an IP address, ignoring";
             return ();
         }
     }
@@ -324,36 +327,36 @@ sub forticare_auth {
 }
 
 sub forticare_register {
-    my ($access_token, @reg_codes, @ipv4_addresses) = @_;
+    my ($access_token, $reg_codes, $ipv4_addresses) = @_;
 
     my @licenses;
 
     my $ua = Mojo::UserAgent->new;
 
     CODE:
-    for my $code (@reg_codes) {
+    for my $code (@{ $reg_codes }) {
         log_output("Registering code $code");
-
         # Is there an IPv4 address to go along with this?
-        my $ipv4_address = shift @ipv4_addresses;
+        my $ipv4_address = shift @{ $ipv4_addresses };
         if (defined $ipv4_address) {
             log_output "IPv4 address found to be assigned: $ipv4_address" if $ipv4_address;
-        } else {
-            $ipv4_address = '';
-        }
+        } 
+
+        my $request_json = {
+                licenseRegistrationCode => $code,
+                description => "Auto Registered ".localtime()
+        };
+        
+        $request_json->{additionalInfo} = $ipv4_address if defined $ipv4_address;
 
         my $res = $ua->post(
             'https://support.fortinet.com/ES/api/registration/v3/licenses/register' =>
             { Authorization => "Bearer $access_token" } =>
-            json => {
-                licenseRegistrationCode => $code,
-                description => "Auto Registered ".localtime(),
-                additionalInfo => $ipv4_address
-            }
+            json => $request_json
         )->result;
 
         if ($res->is_error) {
-            log_warning("Warning: ".$res->json->{message});
+            log_warning("API Error: ".$res->json->{message});
             next CODE;
         }
 
