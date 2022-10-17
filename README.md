@@ -16,7 +16,7 @@ version .3
     # Specify the directory to store licenses
     ./ftnt_license_registration --license-dir ~/Documents/licenses
 
-    # Don't download licenses, just regisuter
+    # Don't download licenses, just register 
     ./ftnt_license_registration --no-licenses
 
     # API user/pass can be specified as ENV vars
@@ -83,7 +83,7 @@ Some devices do not take an IP address (for example, FortiGates). This script wi
 When given a file, the script opens it and reads in each line, expecting it to be an IPv4 address. If it's not an IPv4 address, it skips the
  line. Any line starting with '#' is considered a comment and skipped.
 
-It then uses one of these IPv4 addresses in each of the license registration requests. If there 'n' licenses and 'm' IPv4 addresses in the file, then the last (n - 4) licenses will not include an IPv4 adsdress.
+It then uses one of these IPv4 addresses in each of the license registration requests. If there 'n' licenses and 'm' IPv4 addresses in the file, then the last (n - m) licenses will not include an IPv4 addresses.
 
 ## --ipv4-addresses &lt;ipv4\_address>
 
