@@ -133,15 +133,20 @@ Note that the password appears to always have an exclaimation mark, so be sure t
 
 =head1 IPv4 ADDRESSES
 
-The C<--ipv4-addresses> argument will eventually take two arguments, although only one is implemented at this stage:
-
-=over
-
-=item It takes a single IPv4 address, and will apply this address to all registrations.
-
-=item It will take a file with an IP address on each line, and apply each IP to eace (not currently implemented).
+The C<--ipv4-addresses> argument takes two different arguments: a C<file> or and C<ipv4_address>
 
 Some devices do not take an IP address (for example, FortiGates). This script will not discriminate, and will still try to apply the IP address. Recommendation it that if you're using this command, separate the licenses that require an IP into a different folder. You can this run this script across that folder with this --ipv4-addresses argument.
+
+=head2 --ipv4-addresses <file>
+
+When given a file, the script opens it and reads in each line, expecting it to be an IPv4 address. If it's not an IPv4 address, it skips the
+ line. Any line starting with '#' is considered a comment and skipped.
+
+It then uses one of these IPv4 addresses in each of the license registration requests. If there 'n' licenses and 'm' IPv4 addresses in the file, then the last (n - m) licenses will not include an IPv4 addresses.
+
+=head2 --ipv4-addresses <ipv4_address>
+
+If it cannot open a file, the script will then check to see if it is an IPv4 address. It will then include this address in every license registration request. This is useful if you're registering the licenses for a lab where the IP addressing matches across each lab 'pod'.
 
 =head1 LICENSE DOWNLOAD
 
@@ -231,12 +236,15 @@ sub license_ipv4_addresses {
 
     return () unless defined $ip_or_file;
 
-    if (open(my $fh, "<:encoding(UTF-8)", $ip_or_file)) {
-        log_warning "File-based '--ip-addresses' not implemented yet, ignoring";
-        return ();
+    my $open_ret = open(my $fh, "<:encoding(UTF-8)", $ip_or_file);
+
+    if ($open_ret) {
+        log_output "Successfully opened IPv4 address list '$ip_or_file'";
+        @ips = ipv4_addresses_from_file($fh);
     } else {
+        log_output "Cannot open '$ip_or_file' as file, treating as IPv4 address";
         # Rough IPv4 validation
-        if ($ip_or_file =~ m{ (\d{1,3}\.){3} \d{1,3}$}xms) {
+        if (is_ipv4_address($ip_or_file)) {
             @ips = ($ip_or_file) x $n_codes;
         } else {
             log_warning "Argument to '--ipv4-addresses' is neither a file, nor an IP address, ignoring";
@@ -244,6 +252,29 @@ sub license_ipv4_addresses {
         }
     }
 }        
+
+# Close enough to an IPv4 address
+sub is_ipv4_address { return $_[0] =~ m{^(\d{1,3}\.){3} \d{1,3}$}xms }
+
+sub ipv4_addresses_from_file {
+    my ($fh) = @_;
+    my @ipv4;
+
+    while (my $line = <$fh>) {
+        chomp $line;
+        # Skip comments
+        next if $line =~ m{^\s*#};
+        if (!is_ipv4_address($line)) {
+            log_warning "'$line' is not an IPv4 address, skipping";
+            next;
+        } 
+
+        push @ipv4, $line;
+    }
+
+    return @ipv4;
+}
+
 
 
 

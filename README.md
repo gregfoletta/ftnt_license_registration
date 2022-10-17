@@ -74,12 +74,20 @@ Note that the password appears to always have an exclaimation mark, so be sure t
 
 # IPv4 ADDRESSES
 
-The `--ipv4-addresses` argument will eventually take two arguments, although only one is implemented at this stage:
+The `--ipv4-addresses` argument takes two different arguments: a `file` or and `ipv4_address`
 
-- It takes a single IPv4 address, and will apply this address to all registrations.
-- It will take a file with an IP address on each line, and apply each IP to eace (not currently implemented).
+Some devices do not take an IP address (for example, FortiGates). This script will not discriminate, and will still try to apply the IP address. Recommendation it that if you're using this command, separate the licenses that require an IP into a different folder. You can this run this script across that folder with this --ipv4-addresses argument.
 
-    Some devices do not take an IP address (for example, FortiGates). This script will not discriminate, and will still try to apply the IP address. Recommendation it that if you're using this command, separate the licenses that require an IP into a different folder. You can this run this script across that folder with this --ipv4-addresses argument.
+## --ipv4-addresses &lt;file>
+
+When given a file, the script opens it and reads in each line, expecting it to be an IPv4 address. If it's not an IPv4 address, it skips the
+ line. Any line starting with '#' is considered a comment and skipped.
+
+It then uses one of these IPv4 addresses in each of the license registration requests. If there 'n' licenses and 'm' IPv4 addresses in the file, then the last (n - 4) licenses will not include an IPv4 adsdress.
+
+## --ipv4-addresses &lt;ipv4\_address>
+
+If it cannot open a file, the script will then check to see if it is an IPv4 address. It will then include this address in every license registration request. This is useful if you're registering the licenses for a lab where the IP addressing matches across each lab 'pod'.
 
 # LICENSE DOWNLOAD
 
@@ -89,11 +97,3 @@ The registration API generally returns the license keys for the codes you regist
 - Some devices require an IP specification, which will not have been done rendering the license useless.
 
 You will get warnings in the console for registration codes that do not return a license.
-
-# POD ERRORS
-
-Hey! **The above document had some coding errors, which are explained below:**
-
-- Around line 146:
-
-    You forgot a '=back' before '=head1'
